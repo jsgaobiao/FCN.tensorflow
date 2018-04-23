@@ -42,7 +42,9 @@ class BatchDatset:
     def _transform(self, filename):
         image = misc.imread(filename)
         if self.__channels and len(image.shape) < 3:  # make sure images are of shape(h,w,3)
-            image = np.array([image for i in range(3)])
+	    image = np.dstack([image, image, image])
+            # image = np.array([image for i in range(3)])
+	    # print('channel < 3'+str(image.shape))
 
         if self.image_options.get("resize", False) and self.image_options["resize"]:
             resize_size = int(self.image_options["resize_size"])
@@ -80,4 +82,7 @@ class BatchDatset:
 
     def get_random_batch(self, batch_size):
         indexes = np.random.randint(0, self.images.shape[0], size=[batch_size]).tolist()
-        return self.images[indexes], self.annotations[indexes]
+	fileList = np.array([])
+	for i in self.files:
+	    fileList = np.append(fileList, i['filename'])
+	return self.images[indexes], self.annotations[indexes], fileList[indexes]

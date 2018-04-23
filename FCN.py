@@ -1,17 +1,21 @@
 from __future__ import print_function
 import tensorflow as tf
+from tensorflow.python import debug as tf_debug
 import numpy as np
+import cv2
 
 import TensorflowUtils as utils
-import read_MITSceneParsingData as scene_parsing
+import read_LadybugData as scene_parsing
 import datetime
 import BatchDatsetReader as dataset
+import pdb
 from six.moves import xrange
 
 FLAGS = tf.flags.FLAGS
-tf.flags.DEFINE_integer("batch_size", "2", "batch size for training")
-tf.flags.DEFINE_string("logs_dir", "logs/", "path to logs directory")
-tf.flags.DEFINE_string("data_dir", "Data_zoo/MIT_SceneParsing/", "path to dataset")
+tf.flags.DEFINE_integer("batch_size", "32", "batch size for training")
+tf.flags.DEFINE_string("logs_dir", "logs/model_0422_ignore0/", "path to logs directory")
+tf.flags.DEFINE_string("vis_dir", "logs/vis/", "path to save results of visualization")
+tf.flags.DEFINE_string("data_dir", "Data_zoo/ladybug/", "path to dataset")
 tf.flags.DEFINE_float("learning_rate", "1e-4", "Learning rate for Adam Optimizer")
 tf.flags.DEFINE_string("model_dir", "Model_zoo/", "Path to vgg model mat")
 tf.flags.DEFINE_bool('debug', "False", "Debug mode: True/ False")
@@ -20,8 +24,10 @@ tf.flags.DEFINE_string('mode', "train", "Mode train/ test/ visualize")
 MODEL_URL = 'http://www.vlfeat.org/matconvnet/models/beta16/imagenet-vgg-verydeep-19.mat'
 
 MAX_ITERATION = int(1e5 + 1)
-NUM_OF_CLASSESS = 151
+NUM_OF_CLASSESS = 7
 IMAGE_SIZE = 224
+IMAGE_HEIGHT = 144
+IMAGE_WIDTH = 1080
 
 
 def vgg_net(weights, image):
@@ -139,18 +145,31 @@ def train(loss_val, var_list):
             utils.add_gradient_summary(grad, var)
     return optimizer.apply_gradients(grads)
 
+def FixLogitsWithIgnoreClass(logits, labels):
+    # Make zeros everywhere except for the ignored label
+    ignoreLabel = 0
+    tmpLabel0 = tf.expand_dims(labels, -1)
+    tmpLabel1 = tf.ones_like(logits[:,:,:,1:], dtype=tf.int32)
+    ignoreMatrix = tf.concat([tmpLabel0, tmpLabel1], 3)
+    print('ignoreMatrixs shape: ')
+    print(tf.shape(ignoreMatrix))
+    # Make corresponding logits big enough
+    logitsFixed = tf.where(ignoreMatrix == 0, 1e20 * tf.ones_like(logits), logits)
+    return logitsFixed
 
 def main(argv=None):
     keep_probability = tf.placeholder(tf.float32, name="keep_probabilty")
-    image = tf.placeholder(tf.float32, shape=[None, IMAGE_SIZE, IMAGE_SIZE, 3], name="input_image")
-    annotation = tf.placeholder(tf.int32, shape=[None, IMAGE_SIZE, IMAGE_SIZE, 1], name="annotation")
+    image = tf.placeholder(tf.float32, shape=[None, IMAGE_HEIGHT, IMAGE_WIDTH, 3], name="input_image")
+    annotation = tf.placeholder(tf.int32,shape=[None, IMAGE_HEIGHT, IMAGE_WIDTH, 1], name="annotation")
 
     pred_annotation, logits = inference(image, keep_probability)
     tf.summary.image("input_image", image, max_outputs=2)
     tf.summary.image("ground_truth", tf.cast(annotation, tf.uint8), max_outputs=2)
     tf.summary.image("pred_annotation", tf.cast(pred_annotation, tf.uint8), max_outputs=2)
+    labels = tf.squeeze(annotation, squeeze_dims=[3])
+    logits = FixLogitsWithIgnoreClass(logits, labels)
     loss = tf.reduce_mean((tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits,
-                                                                          labels=tf.squeeze(annotation, squeeze_dims=[3]),
+                                                                          labels=labels,
                                                                           name="entropy")))
     tf.summary.scalar("entropy", loss)
 
@@ -164,18 +183,20 @@ def main(argv=None):
     summary_op = tf.summary.merge_all()
 
     print("Setting up image reader...")
-    train_records, valid_records = scene_parsing.read_dataset(FLAGS.data_dir)
+    train_records, valid_records, test_records = scene_parsing.read_dataset(FLAGS.data_dir)
     print(len(train_records))
     print(len(valid_records))
+    print(len(test_records))
 
     print("Setting up dataset reader")
-    image_options = {'resize': True, 'resize_size': IMAGE_SIZE}
+    image_options = {'resize': False, 'resize_size': IMAGE_SIZE}
     if FLAGS.mode == 'train':
         train_dataset_reader = dataset.BatchDatset(train_records, image_options)
     validation_dataset_reader = dataset.BatchDatset(valid_records, image_options)
+    if FLAGS.mode == 'test':
+        test_dataset_reader = dataset.BatchDatset(test_records, image_options)
 
     sess = tf.Session()
-
     print("Setting up Saver...")
     saver = tf.train.Saver()
     summary_writer = tf.summary.FileWriter(FLAGS.logs_dir, sess.graph)
@@ -198,7 +219,7 @@ def main(argv=None):
                 print("Step: %d, Train_loss:%g" % (itr, train_loss))
                 summary_writer.add_summary(summary_str, itr)
 
-            if itr % 500 == 0:
+            if itr % 1000 == 0:
                 valid_images, valid_annotations = validation_dataset_reader.next_batch(FLAGS.batch_size)
                 valid_loss = sess.run(loss, feed_dict={image: valid_images, annotation: valid_annotations,
                                                        keep_probability: 1.0})
@@ -206,18 +227,32 @@ def main(argv=None):
                 saver.save(sess, FLAGS.logs_dir + "model.ckpt", itr)
 
     elif FLAGS.mode == "visualize":
-        valid_images, valid_annotations = validation_dataset_reader.get_random_batch(FLAGS.batch_size)
+        valid_images, valid_annotations, valid_files = validation_dataset_reader.get_random_batch(FLAGS.batch_size)
         pred = sess.run(pred_annotation, feed_dict={image: valid_images, annotation: valid_annotations,
                                                     keep_probability: 1.0})
         valid_annotations = np.squeeze(valid_annotations, axis=3)
         pred = np.squeeze(pred, axis=3)
 
         for itr in range(FLAGS.batch_size):
-            utils.save_image(valid_images[itr].astype(np.uint8), FLAGS.logs_dir, name="inp_" + str(5+itr))
-            utils.save_image(valid_annotations[itr].astype(np.uint8), FLAGS.logs_dir, name="gt_" + str(5+itr))
-            utils.save_image(pred[itr].astype(np.uint8), FLAGS.logs_dir, name="pred_" + str(5+itr))
+            utils.save_image(valid_images[itr].astype(np.uint8), FLAGS.vis_dir, name="inp_" + valid_files[itr])
+            utils.save_image(valid_annotations[itr].astype(np.uint8), FLAGS.vis_dir, name="gt_" + valid_files[itr])
+            utils.save_image(pred[itr].astype(np.uint8), FLAGS.vis_dir, name="pred_" + valid_files[itr])
             print("Saved image: %d" % itr)
 
+    elif FLAGS.mode == "test":
+        # videoWriter = cv2.VideoWriter('test.avi', cv2.cv.CV_FOURCC('M', 'J', 'P', 'G'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT), False)
+        for itr in range(len(test_records)):
+            test_images, test_annotations = test_dataset_reader.next_batch(1)
+            pred = sess.run(pred_annotation, feed_dict={image: test_images, annotation: test_annotations,
+                                                        keep_probability: 1.0})
+            test_annotations = np.squeeze(test_annotations, axis=3)
+            pred = np.squeeze(pred, axis=3)
+            print(itr)
+            # videoWriter.write(pred[0].astype(np.uint8))
+            utils.save_image(test_images[0].astype(np.uint8), FLAGS.vis_dir, name="inp_" + test_records[itr]['filename'])
+            utils.save_image(test_annotations[0].astype(np.uint8), FLAGS.vis_dir, name="gt_" + test_records[itr]['filename'])
+            utils.save_image(pred[0].astype(np.uint8), FLAGS.vis_dir, name="pred_" + test_records[itr]['filename'])
+        # videoWriter.release()
 
 if __name__ == "__main__":
     tf.app.run()
