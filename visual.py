@@ -19,9 +19,9 @@ def LabelColor(data):
             elif data[i,j,0] == 6:
                 data[i,j] = [255,128,0]
 
-img = cv2.imread('/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test/inp_34977959.png', cv2.IMREAD_COLOR)
-gt = cv2.imread('/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test/gt_34977959.png', cv2.IMREAD_COLOR)
-pre = cv2.imread('/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test/pred_34977959.png', cv2.IMREAD_COLOR)
+img = cv2.imread('/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test/inp_34991994.png', cv2.IMREAD_COLOR)
+gt = cv2.imread('/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test/gt_34991994.png', cv2.IMREAD_COLOR)
+pre = cv2.imread('/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test/pred_34991994.png', cv2.IMREAD_COLOR)
 
 LabelColor(gt)
 LabelColor(pre)
