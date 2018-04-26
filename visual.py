@@ -18,9 +18,17 @@ def LabelColor(data):
                 data[i,j] = [0,255,255]
             elif data[i,j,0] == 6:
                 data[i,j] = [255,128,0]
+            elif data[i,j,0] == 7:      # bin
+                data[i,j] = [128,0,255]
+            elif data[i,j,0] == 8:      # stop bicycle
+                data[i,j] = [0,64,128]
+            elif data[i,j,0] == 9:      # handrail
+                data[i,j] = [64,0,128]
+            elif data[i,j,0] == 10:      # road
+                data[i,j] = [208,149,117]
 
-img = cv2.imread('/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test/inp_34991994.png', cv2.IMREAD_COLOR)
-gt = cv2.imread('/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test/gt_34991994.png', cv2.IMREAD_COLOR)
+img = cv2.imread('/home/gaobiao/Documents/2-1/ladybug/34882606_img.png', cv2.IMREAD_COLOR)
+gt = cv2.imread('/home/gaobiao/Documents/2-1/ladybug/34882606_gt.png', cv2.IMREAD_COLOR)
 pre = cv2.imread('/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test/pred_34991994.png', cv2.IMREAD_COLOR)
 
 LabelColor(gt)

@@ -1,3 +1,4 @@
+*.txt
 *.avi
 logs/*
 .idea

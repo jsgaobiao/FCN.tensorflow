@@ -13,7 +13,7 @@ from six.moves import xrange
 
 FLAGS = tf.flags.FLAGS
 tf.flags.DEFINE_integer("batch_size", "32", "batch size for training")
-tf.flags.DEFINE_string("logs_dir", "logs/model_0422_ignore0/", "path to logs directory")
+tf.flags.DEFINE_string("logs_dir", "logs/model_0424_bg/", "path to logs directory")
 tf.flags.DEFINE_string("vis_dir", "logs/vis/", "path to save results of visualization")
 tf.flags.DEFINE_string("data_dir", "Data_zoo/ladybug/", "path to dataset")
 tf.flags.DEFINE_float("learning_rate", "1e-4", "Learning rate for Adam Optimizer")
@@ -24,7 +24,7 @@ tf.flags.DEFINE_string('mode', "train", "Mode train/ test/ visualize")
 MODEL_URL = 'http://www.vlfeat.org/matconvnet/models/beta16/imagenet-vgg-verydeep-19.mat'
 
 MAX_ITERATION = int(1e5 + 1)
-NUM_OF_CLASSESS = 7
+NUM_OF_CLASSESS = 11
 IMAGE_SIZE = 224
 IMAGE_HEIGHT = 144
 IMAGE_WIDTH = 1080

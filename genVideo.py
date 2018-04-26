@@ -5,10 +5,10 @@ import matplotlib.pyplot as plot
 import matplotlib.image as mpimg
 import pdb
 
-PATH = '/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test/'
+PATH = '/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test_bg/'
 IMAGE_WIDTH = 1080
 IMAGE_HEIGHT = 144
-NUM_OF_CLASSESS = 7
+NUM_OF_CLASSESS = 11
 
 def ColorMap(data, img):
     if data[0] == 1:        # people
@@ -23,6 +23,14 @@ def ColorMap(data, img):
         data = [0,255,255]
     elif data[0] == 6:      # cyclist
         data = [255,128,0]
+    elif data[0] == 7:      # bin
+        data = [128,0,255]
+    elif data[0] == 8:      # stop bicycle
+        data = [0,64,128]
+    elif data[0] == 9:      # handrail
+        data = [64,0,128]
+    elif data[0] == 10:      # road
+        data = [208,149,117]
     else:
         data[:] = img[:]
     return data
@@ -47,6 +55,20 @@ def OutputResult(table):
         for j in range(NUM_OF_CLASSESS):
             fout.write('%d ' % table[i,j])
         fout.write('\n')
+    fout.write('---------------------------\n')
+    fout.write('label tp fp fn IoU\n')
+    for i in range(1,NUM_OF_CLASSESS):
+        tp = fp = fn = 0
+        tp = table[i,i].astype(int)
+        for j in range(1, NUM_OF_CLASSESS):
+            if i != j:
+                fp += table[j,i].astype(int)
+                fn += table[i,j].astype(int)
+        if (tp + fp + fn != 0):
+            IoU = float(tp) / float(tp + fp + fn)
+        else:
+            IoU = 0
+        fout.write('%d %d %d %d %.6f\n' % (int(i), int(tp), int(fp), int(fn), float(IoU)))
     fout.close()
 
 listName = os.listdir(PATH)
@@ -67,8 +89,8 @@ imgList.sort()
 gtList.sort()
 preList.sort()
 
-#videoWriter = cv2.VideoWriter('test.avi', cv2.cv.CV_FOURCC('M', 'J', 'P', 'G'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT * 2), True)
-videoWriter = cv2.VideoWriter('test.avi', cv2.VideoWriter_fourcc(*'XVID'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT * 2), True)
+videoWriter = cv2.VideoWriter('test.avi', cv2.cv.CV_FOURCC('M', 'J', 'P', 'G'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT * 2), True)
+#videoWriter = cv2.VideoWriter('test.avi', cv2.VideoWriter_fourcc(*'XVID'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT * 2), True)
 
 for i in range(len(imgList)):
     img = cv2.imread(PATH + imgList[i], cv2.IMREAD_COLOR)
