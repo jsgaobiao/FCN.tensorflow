@@ -36,13 +36,15 @@ class BatchDatset:
         self.__channels = False
         self.annotations = np.array(
             [np.expand_dims(self._transform(filename['annotation']), axis=3) for filename in self.files])
+        # self.annotations = np.array(
+        #     [self._transform(filename['annotation']) for filename in self.files])
         print (self.images.shape)
         print (self.annotations.shape)
 
     def _transform(self, filename):
         image = misc.imread(filename)
         if self.__channels and len(image.shape) < 3:  # make sure images are of shape(h,w,3)
-	    image = np.dstack([image, image, image])
+	       image = np.dstack([image, image, image])
             # image = np.array([image for i in range(3)])
 	    # print('channel < 3'+str(image.shape))
 

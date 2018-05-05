@@ -6,25 +6,21 @@ def LabelColor(data):
     height, width, channel = data.shape
     for i in range(height):
         for j in range(width):
-            if data[i,j,0] == 1:
+            if data[i,j,0] == 1:        # people
                 data[i,j] = [255, 0, 0]
-            elif data[i,j,0] == 2:
+            elif data[i,j,0] == 2:      # car
                 data[i,j] = [0,0,255]
-            elif data[i,j,0] == 3:
+            elif data[i,j,0] == 3:      # tree
                 data[i,j] = [0,255,0]
-            elif data[i,j,0] == 4:
+            elif data[i,j,0] == 4:      # sign
                 data[i,j] = [255,0,255]
-            elif data[i,j,0] == 5:
+            elif data[i,j,0] == 5:      # building
                 data[i,j] = [0,255,255]
-            elif data[i,j,0] == 6:
+            elif data[i,j,0] == 6:      # cyclist
                 data[i,j] = [255,128,0]
-            elif data[i,j,0] == 7:      # bin
-                data[i,j] = [128,0,255]
-            elif data[i,j,0] == 8:      # stop bicycle
+            elif data[i,j,0] == 7:      # stop bicycle
                 data[i,j] = [0,64,128]
-            elif data[i,j,0] == 9:      # handrail
-                data[i,j] = [64,0,128]
-            elif data[i,j,0] == 10:      # road
+            elif data[i,j,0] == 8:      # road
                 data[i,j] = [208,149,117]
 
 img = cv2.imread('/home/gaobiao/Documents/2-1/ladybug/34882606_img.png', cv2.IMREAD_COLOR)
