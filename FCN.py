@@ -13,8 +13,8 @@ from six.moves import xrange
 
 FLAGS = tf.flags.FLAGS
 tf.flags.DEFINE_integer("batch_size", "32", "batch size for training")
-tf.flags.DEFINE_string("logs_dir", "logs/model_0504_3channel/", "path to logs directory")
-tf.flags.DEFINE_string("vis_dir", "logs/vis/", "path to save results of visualization")
+tf.flags.DEFINE_string("logs_dir", "logs/model_0509_3channel_3/", "path to logs directory")
+tf.flags.DEFINE_string("vis_dir", "logs/vis/test_3channel_3/", "path to save results of visualization")
 tf.flags.DEFINE_string("data_dir", "Data_zoo/ladybug/", "path to dataset")
 tf.flags.DEFINE_float("learning_rate", "1e-4", "Learning rate for Adam Optimizer")
 tf.flags.DEFINE_string("model_dir", "Model_zoo/", "Path to vgg model mat")
@@ -198,7 +198,7 @@ def main(argv=None):
 
     sess = tf.Session()
     print("Setting up Saver...")
-    saver = tf.train.Saver()
+    saver = tf.train.Saver(max_to_keep = 10)
     summary_writer = tf.summary.FileWriter(FLAGS.logs_dir, sess.graph)
 
     sess.run(tf.global_variables_initializer())
@@ -219,7 +219,7 @@ def main(argv=None):
                 print("Step: %d, Train_loss:%g" % (itr, train_loss))
                 summary_writer.add_summary(summary_str, itr)
 
-            if itr % 1000 == 0:
+            if (itr % 5000 == 0) or (itr == 2000) or (itr == 4000) or (itr == 6000) or (itr == 8000):
                 valid_images, valid_annotations = validation_dataset_reader.next_batch(FLAGS.batch_size)
                 valid_loss = sess.run(loss, feed_dict={image: valid_images, annotation: valid_annotations,
                                                        keep_probability: 1.0})

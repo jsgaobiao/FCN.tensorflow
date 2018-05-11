@@ -5,30 +5,30 @@ import matplotlib.pyplot as plot
 import matplotlib.image as mpimg
 import pdb
 
-PATH = '/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test_3channel/'
+PATH = '/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test_3channel_3/'
 IMAGE_WIDTH = 1080
 IMAGE_HEIGHT = 144
 NUM_OF_CLASSESS = 9
 
 def ColorMap(data, img):
     if data[0] == 1:        # people
-        data = [255, 0, 0]
+        data = [0, 0,255]
     elif data[0] == 2:      # car
-        data = [0,0,255]
+        data = [255,0,0]
     elif data[0] == 3:      # tree
         data = [0,255,0]
     elif data[0] == 4:      # sign
         data = [255,0,255]
     elif data[0] == 5:      # building
-        data = [0,255,255]
+        data = [255,255,0]
     elif data[0] == 6:      # cyclist
-        data = [255,128,0]
+        data = [0,128,255]
     elif data[0] == 7:      # stop bicycle
-        data = [0,64,128]
+        data = [128,64,0]
     elif data[0] == 8:      # road
         data = [208,149,117]
     else:
-        data[:] = img[:]
+        data[:] = [img[0], img[0], img[0]]
     return data
 
 def LabelColor(img, gt, pre):
