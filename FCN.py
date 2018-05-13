@@ -13,8 +13,8 @@ from six.moves import xrange
 
 FLAGS = tf.flags.FLAGS
 tf.flags.DEFINE_integer("batch_size", "32", "batch size for training")
-tf.flags.DEFINE_string("logs_dir", "logs/model_0509_3channel_3/", "path to logs directory")
-tf.flags.DEFINE_string("vis_dir", "logs/vis/test_3channel_3/", "path to save results of visualization")
+tf.flags.DEFINE_string("logs_dir", "logs/model_0513_3channel_weight/", "path to logs directory")
+tf.flags.DEFINE_string("vis_dir", "logs/vis/test_3channel_weight/", "path to save results of visualization")
 tf.flags.DEFINE_string("data_dir", "Data_zoo/ladybug/", "path to dataset")
 tf.flags.DEFINE_float("learning_rate", "1e-4", "Learning rate for Adam Optimizer")
 tf.flags.DEFINE_string("model_dir", "Model_zoo/", "Path to vgg model mat")
@@ -168,9 +168,14 @@ def main(argv=None):
     tf.summary.image("pred_annotation", tf.cast(pred_annotation, tf.uint8), max_outputs=2)
     labels = tf.squeeze(annotation, squeeze_dims=[3])
     logits = FixLogitsWithIgnoreClass(logits, labels)
-    loss = tf.reduce_mean((tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits,
-                                                                          labels=labels,
-                                                                          name="entropy")))
+    # Calculate loss
+    class_weights = tf.constant([0.1, 1., 1., 0.1, 8., 0.1, 2., 0.3, 0.1])
+    onehot_labels = tf.one_hot(labels, depth=9)
+    weights = tf.reduce_sum(class_weights * onehot_labels, axis=3)
+    unweighted_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels, name="entropy")
+    weighted_loss = unweighted_loss * weights
+    loss = tf.reduce_mean(weighted_loss)
+    # loss = tf.reduce_mean((tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels, name="entropy")))
     tf.summary.scalar("entropy", loss)
 
     trainable_var = tf.trainable_variables()
@@ -214,12 +219,24 @@ def main(argv=None):
 
             sess.run(train_op, feed_dict=feed_dict)
 
+            # Debug
+            # output = sess.run(weights, feed_dict=feed_dict)
+            # print("weight shape : ", output.shape)
+            # print("weight : ", output[0])
+            # output = sess.run(weighted_loss, feed_dict=feed_dict)
+            # print("weighted_loss shape: ", output.shape)
+            # print("weighted_loss : ", output)
+            # output = sess.run(loss, feed_dict=feed_dict)
+            # print("loss shape: ", output.shape)
+            # print("loss : ", output)
+            # Debug
+
             if itr % 10 == 0:
                 train_loss, summary_str = sess.run([loss, summary_op], feed_dict=feed_dict)
                 print("Step: %d, Train_loss:%g" % (itr, train_loss))
                 summary_writer.add_summary(summary_str, itr)
 
-            if (itr % 5000 == 0) or (itr == 2000) or (itr == 4000) or (itr == 6000) or (itr == 8000):
+            if (itr % 3000 == 0):
                 valid_images, valid_annotations = validation_dataset_reader.next_batch(FLAGS.batch_size)
                 valid_loss = sess.run(loss, feed_dict={image: valid_images, annotation: valid_annotations,
                                                        keep_probability: 1.0})
