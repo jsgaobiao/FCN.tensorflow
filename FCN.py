@@ -13,10 +13,10 @@ from six.moves import xrange
 
 FLAGS = tf.flags.FLAGS
 tf.flags.DEFINE_integer("batch_size", "32", "batch size for training")
-tf.flags.DEFINE_string("logs_dir", "logs/model_0513_3channel_weight/", "path to logs directory")
-tf.flags.DEFINE_string("vis_dir", "logs/vis/test_3channel_weight/", "path to save results of visualization")
+tf.flags.DEFINE_string("logs_dir", "logs/model_0513_3channel_weight_lr5/", "path to logs directory")
+tf.flags.DEFINE_string("vis_dir", "logs/vis/test_3channel_weight_lr5/", "path to save results of visualization")
 tf.flags.DEFINE_string("data_dir", "Data_zoo/ladybug/", "path to dataset")
-tf.flags.DEFINE_float("learning_rate", "1e-4", "Learning rate for Adam Optimizer")
+tf.flags.DEFINE_float("learning_rate", "2e-5", "Learning rate for Adam Optimizer")
 tf.flags.DEFINE_string("model_dir", "Model_zoo/", "Path to vgg model mat")
 tf.flags.DEFINE_bool('debug', "False", "Debug mode: True/ False")
 tf.flags.DEFINE_string('mode', "train", "Mode train/ test/ visualize")
@@ -169,7 +169,7 @@ def main(argv=None):
     labels = tf.squeeze(annotation, squeeze_dims=[3])
     logits = FixLogitsWithIgnoreClass(logits, labels)
     # Calculate loss
-    class_weights = tf.constant([0.1, 1., 1., 0.1, 8., 0.1, 2., 0.3, 0.1])
+    class_weights = tf.constant([0.1, 1., 1., 0.1, 20., 0.1, 2., 0.3, 0.1])
     onehot_labels = tf.one_hot(labels, depth=9)
     weights = tf.reduce_sum(class_weights * onehot_labels, axis=3)
     unweighted_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels, name="entropy")
@@ -236,7 +236,7 @@ def main(argv=None):
                 print("Step: %d, Train_loss:%g" % (itr, train_loss))
                 summary_writer.add_summary(summary_str, itr)
 
-            if (itr % 3000 == 0):
+            if (itr % 4000 == 0):
                 valid_images, valid_annotations = validation_dataset_reader.next_batch(FLAGS.batch_size)
                 valid_loss = sess.run(loss, feed_dict={image: valid_images, annotation: valid_annotations,
                                                        keep_probability: 1.0})

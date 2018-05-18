@@ -19,12 +19,12 @@ def Map(prob):
     return ret
 
 NUM_OF_CLASSES = 0
-fin = open('result_3channel.txt','r')
+fin = open('result_3channel_weight.txt','r')
 NUM_OF_CLASSES = int(fin.readline())
 mat = [[0] * NUM_OF_CLASSES] * NUM_OF_CLASSES
 
 for i in range(NUM_OF_CLASSES):
-    s = fin.readline().replace('\n','')
+    s = fin.readline().replace(' \n','')
     s = s.split(' ')
     mat[i] = [int(x) for x in s]
 

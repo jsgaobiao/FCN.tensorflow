@@ -5,7 +5,7 @@ import matplotlib.pyplot as plot
 import matplotlib.image as mpimg
 import pdb
 
-PATH = '/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test_3channel_3/'
+PATH = '/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test_3channel_weight_lr5/'
 IMAGE_WIDTH = 1080
 IMAGE_HEIGHT = 144
 NUM_OF_CLASSESS = 9
@@ -45,7 +45,7 @@ def LabelColor(img, gt, pre):
     return table
 
 def OutputResult(table):
-    fout = open('result_3channel.txt', 'w')
+    fout = open('result_3channel_weight_lr5.txt', 'w')
     fout.write('%d\n' % NUM_OF_CLASSESS)
     for i in range(NUM_OF_CLASSESS):
         for j in range(NUM_OF_CLASSESS):
@@ -85,7 +85,7 @@ imgList.sort()
 gtList.sort()
 preList.sort()
 
-videoWriter = cv2.VideoWriter('test_3channel.avi', cv2.cv.CV_FOURCC('M', 'J', 'P', 'G'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT * 2), True)
+videoWriter = cv2.VideoWriter('test_3channel_weight_lr5.avi', cv2.cv.CV_FOURCC('M', 'J', 'P', 'G'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT * 2), True)
 #videoWriter = cv2.VideoWriter('test.avi', cv2.VideoWriter_fourcc(*'XVID'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT * 2), True)
 
 for i in range(len(imgList)):
