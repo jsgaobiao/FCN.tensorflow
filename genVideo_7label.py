@@ -5,10 +5,10 @@ import matplotlib.pyplot as plot
 import matplotlib.image as mpimg
 import pdb
 
-PATH = '/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test_0706_front/'
+PATH = '/home/gaobiao/Documents/FCN.tensorflow/logs/vis/test_0709_baseline/'
 IMAGE_WIDTH = 1080
-IMAGE_HEIGHT = 144
-NUM_OF_CLASSESS = 9
+IMAGE_HEIGHT = 32
+NUM_OF_CLASSESS = 7
 
 def ColorMap(data, img):
     if img[1] == 0:         # intensity == 0, invalid data
@@ -25,11 +25,11 @@ def ColorMap(data, img):
         data = [255,0,255]
     elif data[0] == 5:      # building
         data = [255,255,0]
-    elif data[0] == 6:      # cyclist
-        data = [0,128,255]
-    elif data[0] == 7:      # stop bicycle
-        data = [128,64,0]
-    elif data[0] == 8:      # road
+#    elif data[0] == 6:      # cyclist
+#        data = [0,128,255]
+#    elif data[0] == 7:      # stop bicycle
+#        data = [128,64,0]
+    elif data[0] == 6:      # road
         data = [208,149,117]
     else:
         data[:] = [img[0], img[0], img[0]]
@@ -49,7 +49,7 @@ def LabelColor(img, gt, pre):
     return table
 
 def OutputResult(table):
-    fout = open('result_front.txt', 'w')
+    fout = open('result_baseline.txt', 'w')
     fout.write('%d\n' % NUM_OF_CLASSESS)
     for i in range(NUM_OF_CLASSESS):
         for j in range(NUM_OF_CLASSESS):
@@ -89,7 +89,7 @@ imgList.sort()
 gtList.sort()
 preList.sort()
 
-videoWriter = cv2.VideoWriter('test_front.avi', cv2.cv.CV_FOURCC('M', 'J', 'P', 'G'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT * 2), True)
+videoWriter = cv2.VideoWriter('test_baseline.avi', cv2.cv.CV_FOURCC('M', 'J', 'P', 'G'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT * 5 * 2), True)
 #videoWriter = cv2.VideoWriter('test.avi', cv2.VideoWriter_fourcc(*'XVID'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT * 2), True)
 
 for i in range(len(imgList)):
@@ -99,6 +99,7 @@ for i in range(len(imgList)):
     table = LabelColor(img, gt, pre)
     cntTable += table
     mergeImg = np.concatenate((pre,gt), axis=0)
+    mergeImg = cv2.resize(mergeImg, (IMAGE_WIDTH, IMAGE_HEIGHT * 5 * 2), interpolation=cv2.INTER_NEAREST)
     videoWriter.write(mergeImg)
     print('Frame: %d' % i)
 

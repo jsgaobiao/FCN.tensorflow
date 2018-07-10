@@ -12,21 +12,21 @@ import pdb
 from six.moves import xrange
 
 FLAGS = tf.flags.FLAGS
-tf.flags.DEFINE_integer("batch_size", "32", "batch size for training")
-tf.flags.DEFINE_string("logs_dir", "logs/model_0614_fix0/", "path to logs directory")
-tf.flags.DEFINE_string("vis_dir", "logs/vis/test_0614_fix0/", "path to save results of visualization")
-tf.flags.DEFINE_string("data_dir", "Data_zoo/ladybug/", "path to dataset")
-tf.flags.DEFINE_float("learning_rate", "1e-5", "Learning rate for Adam Optimizer")
+tf.flags.DEFINE_integer("batch_size", "2", "batch size for training")
+tf.flags.DEFINE_string("logs_dir", "logs/model_0709_baseline/", "path to logs directory")
+tf.flags.DEFINE_string("vis_dir", "logs/vis/test_0709_baseline/", "path to save results of visualization")
+tf.flags.DEFINE_string("data_dir", "Data_zoo/ladybug_7label/", "path to dataset")
+tf.flags.DEFINE_float("learning_rate", "1e-6", "Learning rate for Adam Optimizer")
 tf.flags.DEFINE_string("model_dir", "Model_zoo/", "Path to vgg model mat")
 tf.flags.DEFINE_bool('debug', "False", "Debug mode: True/ False")
 tf.flags.DEFINE_string('mode', "train", "Mode train/ test/ visualize")
 
 MODEL_URL = 'http://www.vlfeat.org/matconvnet/models/beta16/imagenet-vgg-verydeep-19.mat'
 
-MAX_ITERATION = int(7e4 + 1)
-NUM_OF_CLASSESS = 9
+MAX_ITERATION = int(6e4 + 1)
+NUM_OF_CLASSESS = 7
 IMAGE_SIZE = 224
-IMAGE_HEIGHT = 144
+IMAGE_HEIGHT = 32
 IMAGE_WIDTH = 1080
 
 
@@ -170,8 +170,8 @@ def main(argv=None):
     labels = tf.squeeze(annotation, squeeze_dims=[3])
     logits = FixLogitsWithIgnoreClass(logits, labels)
     # Calculate loss
-    class_weights = tf.constant([0.1, 1., 1., 0.1, 20., 0.1, 8., 8., 0.1])
-    onehot_labels = tf.one_hot(labels, depth=9)
+    class_weights = tf.constant([0.3, 4.7, 10., 0.56, 21.9, 0.4, 0.2])
+    onehot_labels = tf.one_hot(labels, depth = NUM_OF_CLASSESS)
     weights = tf.reduce_sum(class_weights * onehot_labels, axis=3)
     unweighted_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels, name="entropy")
     weighted_loss = unweighted_loss * weights
@@ -199,12 +199,13 @@ def main(argv=None):
     if FLAGS.mode == 'train':
         train_dataset_reader = dataset.BatchDatset(train_records, image_options)
     validation_dataset_reader = dataset.BatchDatset(valid_records, image_options)
-    if FLAGS.mode == 'test':
-        test_dataset_reader = dataset.BatchDatset(test_records, image_options)
+    test_dataset_reader = dataset.BatchDatset(test_records, image_options)
+    # if FLAGS.mode == 'test':
+    #     test_dataset_reader = dataset.BatchDatset(test_records, image_options)
 
     sess = tf.Session()
     print("Setting up Saver...")
-    saver = tf.train.Saver(max_to_keep = 20)
+    saver = tf.train.Saver(max_to_keep = 50)
     summary_writer = tf.summary.FileWriter(FLAGS.logs_dir, sess.graph)
 
     sess.run(tf.global_variables_initializer())
@@ -216,6 +217,8 @@ def main(argv=None):
     if FLAGS.mode == "train":
         for itr in xrange(MAX_ITERATION):
             train_images, train_annotations = train_dataset_reader.next_batch(FLAGS.batch_size)
+            # train_annotations[train_images[:,:,:,0] > 90] = [0]
+            # train_images[train_images[:,:,:,0] > 90] = [0, 0, 0]
             feed_dict = {image: train_images, annotation: train_annotations, keep_probability: 0.85}
 
             sess.run(train_op, feed_dict=feed_dict)
@@ -235,16 +238,29 @@ def main(argv=None):
             # print("loss : ", output)
             # Debug
 
-            if itr % 100 == 0:
+            if (itr % 200 == 0) or (itr < 10):
                 train_loss, summary_str = sess.run([loss, summary_op], feed_dict=feed_dict)
                 print("Step: %d, Train_loss:%g" % (itr, train_loss))
+                valid_images, valid_annotations = validation_dataset_reader.next_batch(100)
+                valid_loss = sess.run(loss, feed_dict={image: valid_images, annotation: valid_annotations,
+                                                       keep_probability: 1.0})
+                if (itr > 10):
+                    print("itr: %d, Validation_loss:%g" % (itr, valid_loss))
+                    test_images, test_annotations = test_dataset_reader.next_batch(100)
+                    test_loss = sess.run(loss, feed_dict={image: test_images, annotation: test_annotations,
+                                                                keep_probability: 1.0})
+                    print("itr: %d, Test_loss:%g" % (itr, test_loss))
                 summary_writer.add_summary(summary_str, itr)
 
-            if (itr % 5000 == 0):
-                valid_images, valid_annotations = validation_dataset_reader.next_batch(FLAGS.batch_size)
+            if (itr % 4000 == 0):
+                valid_images, valid_annotations = validation_dataset_reader.next_batch(100)
                 valid_loss = sess.run(loss, feed_dict={image: valid_images, annotation: valid_annotations,
                                                        keep_probability: 1.0})
                 print("%s ---> Validation_loss: %g" % (datetime.datetime.now(), valid_loss))
+                test_images, test_annotations = test_dataset_reader.next_batch(100)
+                test_loss = sess.run(loss, feed_dict={image: test_images, annotation: test_annotations,
+                                                            keep_probability: 1.0})
+                print("%s ---> Test_loss: %g" % (datetime.datetime.now(), test_loss))
                 saver.save(sess, FLAGS.logs_dir + "model.ckpt", itr)
 
     elif FLAGS.mode == "visualize":
@@ -265,11 +281,15 @@ def main(argv=None):
         for itr in range(len(test_records)):
         # for itr in range(len(train_records)):
             test_images, test_annotations = test_dataset_reader.next_batch(1)
-            pred = sess.run(pred_annotation_no0, feed_dict={image: test_images, annotation: test_annotations,
+            # test_annotations[test_images[:,:,:,0] > 90] = [0]
+            # test_images[test_images[:,:,:,0] > 90] = [0, 0, 0]
+            pred, test_loss = sess.run([pred_annotation, loss], feed_dict={image: test_images, annotation: test_annotations,
                                                         keep_probability: 1.0})
+            # valid_loss = sess.run(loss, feed_dict={image: valid_images, annotation: valid_annotations,
+                                                   # keep_probability: 1.0})
             test_annotations = np.squeeze(test_annotations, axis=3)
             pred = np.squeeze(pred, axis=3)
-            print(itr)
+            print(itr, 'loss:', test_loss)
             # videoWriter.write(pred[0].astype(np.uint8))
             # utils.save_image(test_images[0].astype(np.uint8), FLAGS.vis_dir, name="inp_" + train_records[itr]['filename'])
             # utils.save_image(test_annotations[0].astype(np.uint8), FLAGS.vis_dir, name="gt_" + train_records[itr]['filename'])

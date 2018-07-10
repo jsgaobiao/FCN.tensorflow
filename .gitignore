@@ -2,7 +2,10 @@
 *.out
 *.txt
 *.avi
+*.out
 logs/*
+crf/*
+timeline/*
 .idea
 Data_zoo/*
 Model_zoo/*

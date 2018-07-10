@@ -12,9 +12,9 @@ import pdb
 from six.moves import xrange
 
 FLAGS = tf.flags.FLAGS
-tf.flags.DEFINE_integer("batch_size", "32", "batch size for training")
-tf.flags.DEFINE_string("logs_dir", "logs/model_0614_fix0/", "path to logs directory")
-tf.flags.DEFINE_string("vis_dir", "logs/vis/test_0614_fix0/", "path to save results of visualization")
+tf.flags.DEFINE_integer("batch_size", "2", "batch size for training")
+tf.flags.DEFINE_string("logs_dir", "logs/model_0615_humanloss_bs2/", "path to logs directory")
+tf.flags.DEFINE_string("vis_dir", "logs/vis/test_humanloss_2/", "path to save results of visualization")
 tf.flags.DEFINE_string("data_dir", "Data_zoo/ladybug/", "path to dataset")
 tf.flags.DEFINE_float("learning_rate", "1e-5", "Learning rate for Adam Optimizer")
 tf.flags.DEFINE_string("model_dir", "Model_zoo/", "Path to vgg model mat")
@@ -28,6 +28,12 @@ NUM_OF_CLASSESS = 9
 IMAGE_SIZE = 224
 IMAGE_HEIGHT = 144
 IMAGE_WIDTH = 1080
+R = 10
+w1 = tf.constant(0.6)
+w2 = tf.constant(0.4)
+# w3 = tf.constant(1)
+# M = tf.constant((2*R+1)*(2*R+1)-1)
+w3M = tf.constant(1.0/float((2*R+1)*(2*R+1)-1))
 
 
 def vgg_net(weights, image):
@@ -141,7 +147,6 @@ def train(loss_val, var_list):
     optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
     grads = optimizer.compute_gradients(loss_val, var_list=var_list)
     if FLAGS.debug:
-        # print(len(var_list))
         for grad, var in grads:
             utils.add_gradient_summary(grad, var)
     return optimizer.apply_gradients(grads)
@@ -152,11 +157,58 @@ def FixLogitsWithIgnoreClass(logits, labels):
     tmpLabel0 = tf.expand_dims(labels, -1)
     tmpLabel1 = tf.ones_like(logits[:,:,:,1:], dtype=tf.int32)
     ignoreMatrix = tf.concat([tmpLabel0, tmpLabel1], 3)
-    print('ignoreMatrixs shape: ')
-    print(tf.shape(ignoreMatrix))
     # Make corresponding logits big enough
     logitsFixed = tf.where(tf.equal(ignoreMatrix, 0), 1e20 * tf.ones_like(logits), logits)
     return logitsFixed
+
+def cond(x, y, consLoss, logits, image):
+    return (x < IMAGE_HEIGHT - R)
+
+def body(x, y, consLoss, logits, image):
+    tmp = tf.zeros(FLAGS.batch_size)
+    for dx in range(-R, R):
+        for dy in range(-R, R):
+            if (dx != 0 or dy != 0):
+                tmpLoss = tf.reduce_sum(tf.squeeze(tf.multiply(logits[:,x,y,:], logits[:,x+dx,y+dy,:])),1)
+                # calc gama1
+                # gama_r = tf.multiply(w1, tf.square(tf.subtract(image[:,x,y,0], image[:,x+dx,y+dy,0])))
+                # gama_i = tf.multiply(w2, tf.square(tf.subtract(image[:,x,y,1], image[:,x+dx,y+dy,1])))
+                # gama = tf.exp(tf.negative(tf.add(gama_r, gama_i)))
+                # gama = 1
+
+                # tmpLoss = tf.multiply(gama, tf.log(tmpLoss))
+                tmp = tf.add(tmp, tmpLoss)
+
+    # debug
+    # tmpLoss = tf.reduce_sum(tf.squeeze(tf.multiply(logits[:,x,y,:], logits[:,x+1,y+1,:])),1)
+    # tmp = tf.add(tmp, tmpLoss)
+    # debug
+    consLoss = tf.add(consLoss, tf.negative(tf.multiply(w3M, tmp)))
+    # next pixel
+    y += R
+    x, y = tf.cond(y >= IMAGE_WIDTH - R, lambda: (x+R, R), lambda: (x, y))
+    consLoss.set_shape([FLAGS.batch_size])
+    return x, y, consLoss, logits, image
+
+def GetConstraintLoss(logits, image):
+    x, y, consLoss, logits, image = tf.while_loop(cond, body, (R, R, tf.zeros(FLAGS.batch_size), logits, image))
+    return consLoss
+
+def GetHumanLoss(pred, image):
+    pred = tf.squeeze(pred)
+    # people and car
+    flagMat = tf.logical_or(tf.equal(pred, 1), tf.equal(pred, 2))
+    # rider and bicycle
+    flagMat = tf.logical_or(flagMat, tf.logical_or(tf.equal(pred, 7), tf.equal(pred, 6)))
+    # height > 3m
+    flagMat = tf.logical_and(flagMat, tf.greater(tf.squeeze(image[:,:,:,2]), 180))
+
+    humanLoss = tf.where(flagMat, tf.ones_like(pred), tf.zeros_like(pred))
+    humanLoss = tf.reduce_sum(tf.squeeze(humanLoss), 2)
+    humanLoss = tf.reduce_sum(humanLoss, 1)
+    humanLoss = tf.reduce_mean(tf.cast(humanLoss, tf.float32))
+    return humanLoss
+
 
 def main(argv=None):
     keep_probability = tf.placeholder(tf.float32, name="keep_probabilty")
@@ -168,17 +220,20 @@ def main(argv=None):
     tf.summary.image("ground_truth", tf.cast(annotation, tf.uint8), max_outputs=2)
     tf.summary.image("pred_annotation", tf.cast(pred_annotation, tf.uint8), max_outputs=2)
     labels = tf.squeeze(annotation, squeeze_dims=[3])
-    logits = FixLogitsWithIgnoreClass(logits, labels)
+    fixedLogits = FixLogitsWithIgnoreClass(logits, labels)
     # Calculate loss
     class_weights = tf.constant([0.1, 1., 1., 0.1, 20., 0.1, 8., 8., 0.1])
     onehot_labels = tf.one_hot(labels, depth=9)
     weights = tf.reduce_sum(class_weights * onehot_labels, axis=3)
-    unweighted_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels, name="entropy")
+    unweighted_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=fixedLogits, labels=labels, name="entropy")
     weighted_loss = unweighted_loss * weights
     loss = tf.reduce_mean(weighted_loss)
+    loss_human = GetHumanLoss(pred_annotation, image)
+    # loss_constraint = GetConstraintLoss(logits, image)
+    loss = tf.add(loss, loss_human)
+
     # loss = tf.reduce_mean((tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels, name="entropy")))
     tf.summary.scalar("entropy", loss)
-
     trainable_var = tf.trainable_variables()
     if FLAGS.debug:
         for var in trainable_var:
@@ -221,8 +276,10 @@ def main(argv=None):
             sess.run(train_op, feed_dict=feed_dict)
 
             # Debug
-            # output = sess.run(logits, feed_dict=feed_dict)
-            # print("logits shape : ", output.shape)
+            # output = sess.run(pred_annotation, feed_dict=feed_dict)
+            # print("pred shape : ", output.shape)
+            # output = sess.run(loss_constraint, feed_dict=feed_dict)
+            # print("loss shape: ", output.shape)
             # print("logits : ", logits[0][0][0])
             # output = sess.run(weights, feed_dict=feed_dict)
             # print("weight shape : ", output.shape)
@@ -261,11 +318,11 @@ def main(argv=None):
             print("Saved image: %d" % itr)
 
     elif FLAGS.mode == "test":
-        # videoWriter = cv2.VideoWriter('test.avi', cv2.cv.CV_FOURCC('M', 'J', 'P', 'G'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT), False)
+        # videoWriter = cv2.VideoWriter('test_newloss.avi', cv2.cv.CV_FOURCC('M', 'J', 'P', 'G'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT), False)
         for itr in range(len(test_records)):
         # for itr in range(len(train_records)):
             test_images, test_annotations = test_dataset_reader.next_batch(1)
-            pred = sess.run(pred_annotation_no0, feed_dict={image: test_images, annotation: test_annotations,
+            pred = sess.run(pred_annotation, feed_dict={image: test_images, annotation: test_annotations,
                                                         keep_probability: 1.0})
             test_annotations = np.squeeze(test_annotations, axis=3)
             pred = np.squeeze(pred, axis=3)

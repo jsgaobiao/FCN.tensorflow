@@ -38,8 +38,8 @@ class BatchDatset:
             [np.expand_dims(self._transform(filename['annotation']), axis=3) for filename in self.files])
         # self.annotations = np.array(
         #     [self._transform(filename['annotation']) for filename in self.files])
-        print (self.images.shape)
-        print (self.annotations.shape)
+        print ("image shape:", self.images.shape)
+        print ("annotation shape: ", self.annotations.shape)
 
     def _transform(self, filename):
         image = misc.imread(filename)
@@ -69,7 +69,8 @@ class BatchDatset:
         if self.batch_offset > self.images.shape[0]:
             # Finished epoch
             self.epochs_completed += 1
-            print("****************** Epochs completed: " + str(self.epochs_completed) + "******************")
+            if (self.epochs_completed % 10 == 0):
+                print("****************** Epochs completed: " + str(self.epochs_completed) + "******************")
             # Shuffle the data
             perm = np.arange(self.images.shape[0])
             np.random.shuffle(perm)
