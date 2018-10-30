@@ -19,7 +19,7 @@ def Map(prob):
     return ret
 
 NUM_OF_CLASSES = 0
-fin = open('/home/gaobiao/Documents/FCN.tensorflow/crf/result_test_3channel_weight_lr5_crf (copy).txt','r')
+fin = open('/media/gaobiao/SeagateBackupPlusDrive/Paper/MPR2018/result_seg.txt','r')
 NUM_OF_CLASSES = int(fin.readline())
 mat = [[0] * NUM_OF_CLASSES] * NUM_OF_CLASSES
 
@@ -52,9 +52,9 @@ for i in range(1, NUM_OF_CLASSES):
         for x in range((i-1)*100, i*100):
             for y in range((j-1)*100, j*100):
                 img[x][y] = grey
-        cv2.putText(img, "%.2f"%p[i][j], (j*100-80,i*100-50), cv2.FONT_HERSHEY_COMPLEX, 0.6, 200, 1)
+        cv2.putText(img, "%.0f"%(p[i][j]*100), (j*100-80,i*100-30), cv2.FONT_HERSHEY_COMPLEX, 1.5, 200, 2)
 
 cv2.imshow("result", img)
 cv2.waitKey(0)
-cv2.imwrite("result_crf.png", img)
+cv2.imwrite("result.png", img)
 fin.close()

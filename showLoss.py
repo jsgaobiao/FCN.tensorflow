@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import re
+import sys
 
-f = open('baseline.out', 'r')
+f = open(sys.argv[1], 'r')
 
 trainIteration = []
 trainLoss = []
@@ -29,12 +30,12 @@ for line in f.readlines():
         testLoss.append(float(txt[-1]))
 
 plt.clf()
-plt.plot(trainIteration, trainLoss, lw=2, color='navy', label='train loss')
-plt.plot(valIteration, valLoss, lw=2, color='green', label='val loss')
-plt.plot(testIteration, testLoss, lw=2, color='red', label='test loss')
+plt.plot(trainIteration, trainLoss, lw=1, color='navy', label='train loss')
+plt.plot(valIteration, valLoss, lw=1, color='green', label='val loss')
+plt.plot(testIteration, testLoss, lw=1, color='red', label='test loss')
 plt.xlabel('iteration')
 plt.ylabel('loss')
-plt.xlim([0.0, 100000.0])
-plt.ylim([0.0, 1])
+plt.xlim([0.0, 60000.0])
+plt.ylim([0.0, 0.75])
 plt.title('Loss')
 plt.show()

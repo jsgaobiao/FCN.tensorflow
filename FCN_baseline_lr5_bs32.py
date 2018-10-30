@@ -12,8 +12,8 @@ import pdb
 from six.moves import xrange
 
 FLAGS = tf.flags.FLAGS
-tf.flags.DEFINE_integer("batch_size", "2", "batch size for training")
-tf.flags.DEFINE_string("logs_dir", "logs/model_0709_baseline/", "path to logs directory")
+tf.flags.DEFINE_integer("batch_size", "32", "batch size for training")
+tf.flags.DEFINE_string("logs_dir", "logs/model_0710_baseline_lr5b/", "path to logs directory")
 tf.flags.DEFINE_string("vis_dir", "logs/vis/test_0709_baseline/", "path to save results of visualization")
 tf.flags.DEFINE_string("data_dir", "Data_zoo/ladybug_7label/", "path to dataset")
 tf.flags.DEFINE_float("learning_rate", "1e-6", "Learning rate for Adam Optimizer")

@@ -1,12 +1,8 @@
 from __future__ import print_function
 import tensorflow as tf
 from tensorflow.python import debug as tf_debug
-from tensorflow.python.client import timeline as tf_timeline
 import numpy as np
 import cv2
-import random
-import math
-import datetime
 
 import TensorflowUtils as utils
 import read_LadybugData as scene_parsing
@@ -16,14 +12,13 @@ import pdb
 from six.moves import xrange
 
 FLAGS = tf.flags.FLAGS
-tf.flags.DEFINE_integer("batch_size", "1", "batch size for training")
-tf.flags.DEFINE_string("logs_dir", "logs/model_0628_gamacropR2/", "path to logs directory")
-tf.flags.DEFINE_string("vis_dir", "logs/vis/test_gamacropR2/", "path to save results of visualization")
+tf.flags.DEFINE_integer("batch_size", "2", "batch size for training")
+tf.flags.DEFINE_string("logs_dir", "logs/model_0710_baseline_144/", "path to logs directory")
+tf.flags.DEFINE_string("vis_dir", "logs/vis/test_0710_baseline_144/", "path to save results of visualization")
 tf.flags.DEFINE_string("data_dir", "Data_zoo/ladybug/", "path to dataset")
-tf.flags.DEFINE_float("learning_rate", "1e-4", "Learning rate for Adam Optimizer")
+tf.flags.DEFINE_float("learning_rate", "1e-5", "Learning rate for Adam Optimizer")
 tf.flags.DEFINE_string("model_dir", "Model_zoo/", "Path to vgg model mat")
 tf.flags.DEFINE_bool('debug', "False", "Debug mode: True/ False")
-tf.flags.DEFINE_bool('timeline', "False", "Timeline mode: True/ False")
 tf.flags.DEFINE_string('mode', "train", "Mode train/ test/ visualize")
 
 MODEL_URL = 'http://www.vlfeat.org/matconvnet/models/beta16/imagenet-vgg-verydeep-19.mat'
@@ -33,14 +28,7 @@ NUM_OF_CLASSESS = 9
 IMAGE_SIZE = 224
 IMAGE_HEIGHT = 144
 IMAGE_WIDTH = 1080
-IMAGE_HEIGHT_CROP = 144
-IMAGE_WIDTH_CROP = 108
-R = 2
-w1 = tf.constant(0.6)
-w2 = tf.constant(0.4)
-# w3 = tf.constant(1)
-# M = tf.constant((2*R+1)*(2*R+1)-1)
-w3M = tf.constant(1.0/float((2*R+1)*(2*R+1)-1))
+
 
 def vgg_net(weights, image):
     layers = (
@@ -153,6 +141,7 @@ def train(loss_val, var_list):
     optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
     grads = optimizer.compute_gradients(loss_val, var_list=var_list)
     if FLAGS.debug:
+        # print(len(var_list))
         for grad, var in grads:
             utils.add_gradient_summary(grad, var)
     return optimizer.apply_gradients(grads)
@@ -163,80 +152,34 @@ def FixLogitsWithIgnoreClass(logits, labels):
     tmpLabel0 = tf.expand_dims(labels, -1)
     tmpLabel1 = tf.ones_like(logits[:,:,:,1:], dtype=tf.int32)
     ignoreMatrix = tf.concat([tmpLabel0, tmpLabel1], 3)
+    print('ignoreMatrixs shape: ')
+    print(tf.shape(ignoreMatrix))
     # Make corresponding logits big enough
     logitsFixed = tf.where(tf.equal(ignoreMatrix, 0), 1e20 * tf.ones_like(logits), logits)
     return logitsFixed
 
-def cond(i, consLoss, indexList, neighbourList, logits, image):
-    return i < indexListlen
-
-def body(i, consLoss, indexList, neighbourList, logits, image):
-    gama0 = tf.multiply(-w1, tf.square(image[:,indexList[i][0],indexList[i][1],0] - image[:,neighbourList[i][0],neighbourList[i][1],0]))
-    gama1 = tf.multiply(-w2, tf.square(image[:,indexList[i][0],indexList[i][1],1] - image[:,neighbourList[i][0],neighbourList[i][1],1]))
-    gama = tf.exp(tf.add(gama0, gama1))
-    tmp = tf.reduce_sum(tf.multiply(logits[:,indexList[i][0],indexList[i][1],:], logits[:,neighbourList[i][0],neighbourList[i][1],:]), 1)
-    tmp = tf.reduce_sum(tf.multiply(gama, tmp))
-    consLoss = tf.add(consLoss, tf.multiply(w3M, tmp))
-    return i + 1, consLoss, indexList, neighbourList, logits, image
-
-def GetConstraintLoss(indexList, neighbourList, logits, image):
-    logits = tf.sigmoid(logits)
-    i, consLoss, indexList, neighbourList, logits, image = tf.while_loop(cond, body, (0, tf.zeros(FLAGS.batch_size), indexList, neighbourList, logits, image))
-    return consLoss
-
-def PrepareNeighbour():
-    index = []
-    neighbours = []
-    for i in range(0, IMAGE_HEIGHT_CROP, R):
-        for j in range(0, IMAGE_WIDTH_CROP, R):
-            for di in range(-R/2, R/2):
-                for dj in range(-R/2, R/2):
-                    x = i + di
-                    y = j + dj
-                    if ((di != 0 or dj != 0) and (x >= 0) and (y >= 0) and (x < IMAGE_HEIGHT_CROP) and(y < IMAGE_WIDTH_CROP)):
-                        index.append([i,j])
-                        neighbours.append([x, y])
-    return index, neighbours
-
-index, neighbour = PrepareNeighbour()
-indexListlen = len(index)
-
-def RandomCrop(images, annotations):
-    h = random.randrange(0, IMAGE_HEIGHT - IMAGE_HEIGHT_CROP + 1, 1)
-    w = random.randrange(0, IMAGE_WIDTH - IMAGE_WIDTH_CROP + 1, 1)
-    return images[:,h:h + IMAGE_HEIGHT_CROP, w:w + IMAGE_WIDTH_CROP, :], annotations[:,h:h + IMAGE_HEIGHT_CROP, w:w + IMAGE_WIDTH_CROP, :]
-
-def SubCrop(images, annotations, subi):
-    h = 0
-    w = IMAGE_WIDTH_CROP * subi
-    return images[:,h:h + IMAGE_HEIGHT_CROP, w:w + IMAGE_WIDTH_CROP, :], annotations[:,h:h + IMAGE_HEIGHT_CROP, w:w + IMAGE_WIDTH_CROP, :]
-
 def main(argv=None):
-    indexList = tf.constant(index)
-    neighbourList = tf.constant(neighbour)
-
     keep_probability = tf.placeholder(tf.float32, name="keep_probabilty")
-    image = tf.placeholder(tf.float32, shape=[None, IMAGE_HEIGHT_CROP, IMAGE_WIDTH_CROP, 3], name="input_image")
-    annotation = tf.placeholder(tf.int32,shape=[None, IMAGE_HEIGHT_CROP, IMAGE_WIDTH_CROP, 1], name="annotation")
+    image = tf.placeholder(tf.float32, shape=[None, IMAGE_HEIGHT, IMAGE_WIDTH, 3], name="input_image")
+    annotation = tf.placeholder(tf.int32,shape=[None, IMAGE_HEIGHT, IMAGE_WIDTH, 1], name="annotation")
 
     pred_annotation, pred_annotation_no0, logits = inference(image, keep_probability)
     tf.summary.image("input_image", image, max_outputs=2)
     tf.summary.image("ground_truth", tf.cast(annotation, tf.uint8), max_outputs=2)
     tf.summary.image("pred_annotation", tf.cast(pred_annotation, tf.uint8), max_outputs=2)
     labels = tf.squeeze(annotation, squeeze_dims=[3])
-    fixedLogits = FixLogitsWithIgnoreClass(logits, labels)
+    logits = FixLogitsWithIgnoreClass(logits, labels)
     # Calculate loss
-    class_weights = tf.constant([0.1, 1., 1., 0.1, 20., 0.1, 8., 8., 0.1])
-    onehot_labels = tf.one_hot(labels, depth=9)
+    # class_weights = tf.constant([0.3, 4.7, 10., 0.56, 21.9, 0.4, 0.2])
+    class_weights = tf.constant([0.3, 2., 2., 0.5, 2., 1., 1., 0.5, 0.5])
+    onehot_labels = tf.one_hot(labels, depth = NUM_OF_CLASSESS)
     weights = tf.reduce_sum(class_weights * onehot_labels, axis=3)
-    unweighted_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=fixedLogits, labels=labels, name="entropy")
+    unweighted_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels, name="entropy")
     weighted_loss = unweighted_loss * weights
     loss = tf.reduce_mean(weighted_loss)
-    loss_constraint = GetConstraintLoss(indexList, neighbourList, logits, image)
-    loss = tf.add(loss, tf.reduce_mean(loss_constraint))
-
     # loss = tf.reduce_mean((tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels, name="entropy")))
     tf.summary.scalar("entropy", loss)
+
     trainable_var = tf.trainable_variables()
     if FLAGS.debug:
         for var in trainable_var:
@@ -257,12 +200,13 @@ def main(argv=None):
     if FLAGS.mode == 'train':
         train_dataset_reader = dataset.BatchDatset(train_records, image_options)
     validation_dataset_reader = dataset.BatchDatset(valid_records, image_options)
-    if FLAGS.mode == 'test':
-        test_dataset_reader = dataset.BatchDatset(test_records, image_options)
+    test_dataset_reader = dataset.BatchDatset(test_records, image_options)
+    # if FLAGS.mode == 'test':
+    #     test_dataset_reader = dataset.BatchDatset(test_records, image_options)
 
     sess = tf.Session()
     print("Setting up Saver...")
-    saver = tf.train.Saver(max_to_keep = 20)
+    saver = tf.train.Saver(max_to_keep = 50)
     summary_writer = tf.summary.FileWriter(FLAGS.logs_dir, sess.graph)
 
     sess.run(tf.global_variables_initializer())
@@ -271,36 +215,18 @@ def main(argv=None):
         saver.restore(sess, ckpt.model_checkpoint_path)
         print("Model restored...")
 
-    if FLAGS.timeline == True:
-        options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        run_metadata = tf.RunMetadata()
-
     if FLAGS.mode == "train":
-        lastTime = datetime.datetime.now()
         for itr in xrange(MAX_ITERATION):
             train_images, train_annotations = train_dataset_reader.next_batch(FLAGS.batch_size)
-            train_images, train_annotations = RandomCrop(train_images, train_annotations)
-            feed_dict = {image: train_images, annotation: train_annotations, keep_probability: 1.0}
+            # train_annotations[train_images[:,:,:,0] > 90] = [0]
+            # train_images[train_images[:,:,:,0] > 90] = [0, 0, 0]
+            feed_dict = {image: train_images, annotation: train_annotations, keep_probability: 0.85}
 
-            if FLAGS.timeline == True:
-                sess.run(train_op, options=options, run_metadata=run_metadata, feed_dict=feed_dict)
-                fetched_timeline = tf_timeline.Timeline(run_metadata.step_stats)
-                chrome_trace = fetched_timeline.generate_chrome_trace_format()
-                with open('timeline/timeline_step_%d.json' % itr, 'w') as f:
-                    f.write(chrome_trace)
-            else:
-                sess.run(train_op, feed_dict=feed_dict)
+            sess.run(train_op, feed_dict=feed_dict)
 
             # Debug
-            if (itr < 10):
-                nowTime = datetime.datetime.now()
-                print((nowTime - lastTime).seconds,'sec, ', itr)
-                lastTime = nowTime
             # output = sess.run(logits, feed_dict=feed_dict)
             # print("logits shape : ", output.shape)
-            # print("logits : ", output)
-            # output = sess.run(loss_constraint, feed_dict=feed_dict)
-            # print("loss shape: ", output.shape)
             # print("logits : ", logits[0][0][0])
             # output = sess.run(weights, feed_dict=feed_dict)
             # print("weight shape : ", output.shape)
@@ -313,17 +239,29 @@ def main(argv=None):
             # print("loss : ", output)
             # Debug
 
-            if itr % 100 == 0:
+            if (itr % 200 == 0) or (itr < 10):
                 train_loss, summary_str = sess.run([loss, summary_op], feed_dict=feed_dict)
                 print("Step: %d, Train_loss:%g" % (itr, train_loss))
+                valid_images, valid_annotations = validation_dataset_reader.next_batch(32)
+                valid_loss = sess.run(loss, feed_dict={image: valid_images, annotation: valid_annotations,
+                                                       keep_probability: 1.0})
+                if (itr > 10):
+                    print("itr: %d, Validation_loss:%g" % (itr, valid_loss))
+                    test_images, test_annotations = test_dataset_reader.next_batch(32)
+                    test_loss = sess.run(loss, feed_dict={image: test_images, annotation: test_annotations,
+                                                                keep_probability: 1.0})
+                    print("itr: %d, Test_loss:%g" % (itr, test_loss))
                 summary_writer.add_summary(summary_str, itr)
 
             if (itr % 3000 == 0):
-                valid_images, valid_annotations = validation_dataset_reader.next_batch(FLAGS.batch_size)
-                valid_images, valid_annotations = RandomCrop(valid_images, valid_annotations)
+                valid_images, valid_annotations = validation_dataset_reader.next_batch(32)
                 valid_loss = sess.run(loss, feed_dict={image: valid_images, annotation: valid_annotations,
                                                        keep_probability: 1.0})
                 print("%s ---> Validation_loss: %g" % (datetime.datetime.now(), valid_loss))
+                test_images, test_annotations = test_dataset_reader.next_batch(32)
+                test_loss = sess.run(loss, feed_dict={image: test_images, annotation: test_annotations,
+                                                            keep_probability: 1.0})
+                print("%s ---> Test_loss: %g" % (datetime.datetime.now(), test_loss))
                 saver.save(sess, FLAGS.logs_dir + "model.ckpt", itr)
 
     elif FLAGS.mode == "visualize":
@@ -340,19 +278,19 @@ def main(argv=None):
             print("Saved image: %d" % itr)
 
     elif FLAGS.mode == "test":
-        # videoWriter = cv2.VideoWriter('test_newloss.avi', cv2.cv.CV_FOURCC('M', 'J', 'P', 'G'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT), False)
+        # videoWriter = cv2.VideoWriter('test.avi', cv2.cv.CV_FOURCC('M', 'J', 'P', 'G'), 5, (IMAGE_WIDTH, IMAGE_HEIGHT), False)
         for itr in range(len(test_records)):
         # for itr in range(len(train_records)):
             test_images, test_annotations = test_dataset_reader.next_batch(1)
-            pred = np.zeros_like(np.squeeze(test_annotations, axis=3))
-            for sub in range(IMAGE_WIDTH / IMAGE_WIDTH_CROP):
-                sub_images, sub_annotations = SubCrop(test_images, test_annotations, sub)
-                sub_pred = sess.run(pred_annotation, feed_dict={image: sub_images, annotation: sub_annotations,
+            # test_annotations[test_images[:,:,:,0] > 90] = [0]
+            # test_images[test_images[:,:,:,0] > 90] = [0, 0, 0]
+            pred, test_loss = sess.run([pred_annotation, loss], feed_dict={image: test_images, annotation: test_annotations,
                                                         keep_probability: 1.0})
-                sub_pred = np.squeeze(sub_pred, axis=3)
-                pred[:, :, sub * IMAGE_WIDTH_CROP:(sub + 1) * IMAGE_WIDTH_CROP] = sub_pred
-            print(itr)
+            # valid_loss = sess.run(loss, feed_dict={image: valid_images, annotation: valid_annotations,
+                                                   # keep_probability: 1.0})
             test_annotations = np.squeeze(test_annotations, axis=3)
+            pred = np.squeeze(pred, axis=3)
+            print(itr, 'loss:', test_loss)
             # videoWriter.write(pred[0].astype(np.uint8))
             # utils.save_image(test_images[0].astype(np.uint8), FLAGS.vis_dir, name="inp_" + train_records[itr]['filename'])
             # utils.save_image(test_annotations[0].astype(np.uint8), FLAGS.vis_dir, name="gt_" + train_records[itr]['filename'])
